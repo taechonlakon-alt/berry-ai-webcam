@@ -42,12 +42,19 @@ async def predict_ripeness(image: UploadFile = File(...)):
         class_id = int(best_box.cls[0].item())
         confidence = float(best_box.conf[0].item())
         class_name = model.names[class_id]
+        box_data = best_box.xywhn[0].tolist()
         
         # ส่งข้อมูลกลับไปให้ UI ประมวลผลต่อ
         return {
             "class_id": class_id,
             "class_name": class_name,
             "confidence": confidence,
+            "box": {
+                "xc": box_data[0],
+                "yc": box_data[1],
+                "w": box_data[2],
+                "h": box_data[3]
+            },
             "message": "success"
         }
 

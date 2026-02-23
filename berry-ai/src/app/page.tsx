@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { predictRipeness } from "@/ai/model";
+import { predictRipeness, PredictionBox } from "@/ai/model";
 
 const RIPENESS_LEVELS = [
   { level: 1, label: "ยังไม่สุก (Green)", color: "from-emerald-400 to-green-600", text: "text-emerald-500", desc: "ผลสีเขียว แข็ง มีรสเปรี้ยว" },
@@ -18,6 +18,7 @@ export default function StrawberryCameraApp() {
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [predictedLevel, setPredictedLevel] = useState<number | null>(null);
+  const [predictedBox, setPredictedBox] = useState<PredictionBox | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [autoScanEnabled, setAutoScanEnabled] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -61,6 +62,7 @@ export default function StrawberryCameraApp() {
       }
       setAutoScanEnabled(false);
       setPredictedLevel(null);
+      setPredictedBox(null);
     }
 
     return () => {
@@ -85,7 +87,11 @@ export default function StrawberryCameraApp() {
     try {
       const result = await predictRipeness(videoRef.current);
       if (result) {
-        setPredictedLevel(result);
+        setPredictedLevel(result.level);
+        setPredictedBox(result.box);
+      } else {
+        setPredictedLevel(null);
+        setPredictedBox(null);
       }
     } catch (err) {
       console.error(err);
@@ -142,11 +148,43 @@ export default function StrawberryCameraApp() {
         )}
 
         {/* Scan Animation Overlay */}
-        {isScanning && (
+        {isScanning && !predictedBox && (
           <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden flex flex-col items-center justify-center">
             <div className="w-[80vw] h-[80vw] max-w-sm max-h-sm border-[1.5px] border-white/40 rounded-[2.5rem] relative">
               <div className="absolute top-0 left-0 w-full h-[3px] bg-red-500 shadow-[0_0_20px_#ef4444] animate-[radar_1.5s_ease-in-out_infinite]" />
             </div>
+          </div>
+        )}
+
+        {/* Bounding Box Overlay (OpenCV style) */}
+        {predictedBox && isCameraOn && (
+          <div
+            className="absolute border-2 border-[#00ff00] z-20 pointer-events-none flex flex-col items-center justify-center"
+            style={{
+              left: `${(predictedBox.xc - predictedBox.w / 2) * 100}%`,
+              top: `${(predictedBox.yc - predictedBox.h / 2) * 100}%`,
+              width: `${predictedBox.w * 100}%`,
+              height: `${predictedBox.h * 100}%`,
+              boxShadow: "0 0 10px rgba(0,255,0,0.3) inset, 0 0 10px rgba(0,255,0,0.3)"
+            }}
+          >
+            {/* Center crosshair */}
+            <div className="absolute w-4 h-[1px] bg-[#00ff00]/60" />
+            <div className="absolute w-[1px] h-4 bg-[#00ff00]/60" />
+
+            {/* Dimensions text simulating measurement */}
+            <div className="absolute -top-6 w-full flex justify-center">
+              <span className="bg-black/60 text-[#00ff00] text-[10px] font-mono px-1.5 rounded-sm">W: {Math.round(predictedBox.w * 1000) / 10}</span>
+            </div>
+            <div className="absolute -right-16 h-full flex items-center">
+              <span className="bg-black/60 text-[#00ff00] text-[10px] font-mono px-1.5 rounded-sm">H: {Math.round(predictedBox.h * 1000) / 10}</span>
+            </div>
+
+            {/* Corner dots */}
+            <div className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-full bg-[#00ff00] shadow-[0_0_5px_#00ff00]" />
+            <div className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-[#00ff00] shadow-[0_0_5px_#00ff00]" />
+            <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 rounded-full bg-[#00ff00] shadow-[0_0_5px_#00ff00]" />
+            <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-full bg-[#00ff00] shadow-[0_0_5px_#00ff00]" />
           </div>
         )}
 
@@ -208,6 +246,7 @@ export default function StrawberryCameraApp() {
 
           <button onClick={() => {
             setPredictedLevel(null);
+            setPredictedBox(null);
             setAutoScanEnabled(false);
           }} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/50 active:scale-90 transition-all">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>

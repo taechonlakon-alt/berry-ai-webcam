@@ -3,7 +3,19 @@
  * เซิร์ฟเวอร์ Python จะรันอยู่ที่ localhost:8000
  */
 
-export async function predictRipeness(imageElement: HTMLVideoElement): Promise<number | null> {
+export interface PredictionBox {
+    xc: number;
+    yc: number;
+    w: number;
+    h: number;
+}
+
+export interface PredictionResult {
+    level: number;
+    box: PredictionBox;
+}
+
+export async function predictRipeness(imageElement: HTMLVideoElement): Promise<PredictionResult | null> {
     try {
         // 1. นำภาพจาก Video เข้า Canvas เพื่อแปลงเป็นรูปภาพ
         const canvas = document.createElement("canvas");
@@ -38,8 +50,8 @@ export async function predictRipeness(imageElement: HTMLVideoElement): Promise<n
         const data = await response.json();
 
         // รูปแบบข้อมูลที่ Python คืนค่ามา เช่น:
-        // { "class_id": 1, "class_name": "Full-Ripe", "confidence": 0.85 }
-        if (!data.class_name) {
+        // { "class_id": 1, "class_name": "Full-Ripe", "confidence": 0.85, "box": { xc, yc, w, h } }
+        if (!data.class_name || !data.box) {
             console.warn(data.message);
             return null;
         }
@@ -55,7 +67,12 @@ export async function predictRipeness(imageElement: HTMLVideoElement): Promise<n
         };
 
         const level = ripnessMap[data.class_name] || null;
-        return level;
+        if (level === null) return null;
+
+        return {
+            level,
+            box: data.box as PredictionBox
+        };
     } catch (error) {
         console.error("Prediction failed:", error);
         throw error;

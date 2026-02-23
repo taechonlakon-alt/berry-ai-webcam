@@ -15,10 +15,11 @@ const RIPENESS_LEVELS = [
 export default function StrawberryCameraApp() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [isCameraOn, setIsCameraOn] = useState(false);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [predictedLevel, setPredictedLevel] = useState<number | null>(null);
   const [isScanning, setIsScanning] = useState(false);
-  const [autoScanEnabled, setAutoScanEnabled] = useState(true);
+  const [autoScanEnabled, setAutoScanEnabled] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   // ใช้ useRef เพื่อเก็บสถานะว่าโหลดรอบปัจุบันเสร็จหรือยัง ป้องกันการยิง request ซ้ำซ้อน
@@ -29,28 +30,46 @@ export default function StrawberryCameraApp() {
   };
 
   useEffect(() => {
+    let currentStream: MediaStream | null = null;
     const startCamera = async () => {
       try {
-        if (stream) stream.getTracks().forEach((track) => track.stop());
         const mediaStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: facingMode },
           audio: false,
         });
         setStream(mediaStream);
+        currentStream = mediaStream;
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
         }
         setErrorMsg("");
       } catch (err: any) {
         setErrorMsg("ไม่สามารถเข้าถึงกล้องได้ กรุณาอนุญาต");
+        setIsCameraOn(false);
       }
     };
-    startCamera();
+
+    if (isCameraOn) {
+      startCamera();
+    } else {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        setStream(null);
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      setAutoScanEnabled(false);
+      setPredictedLevel(null);
+    }
+
     return () => {
-      if (stream) stream.getTracks().forEach((track) => track.stop());
+      if (currentStream) {
+        currentStream.getTracks().forEach((track) => track.stop());
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facingMode]);
+  }, [facingMode, isCameraOn]);
 
   const handleScan = async () => {
     if (!videoRef.current || processingRef.current || !stream) return;
@@ -111,6 +130,16 @@ export default function StrawberryCameraApp() {
         />
         {/* Soft dark gradient overlays to ensure text readability */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80 pointer-events-none" />
+
+        {!isCameraOn && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-neutral-900/80 backdrop-blur-sm">
+            <div className="w-20 h-20 mb-4 rounded-full bg-white/10 flex items-center justify-center text-white/50">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0" /><line x1="12" y1="2" x2="12" y2="12" /></svg>
+            </div>
+            <p className="text-white/70 font-medium tracking-wide">กล้องปิดอยู่</p>
+            <p className="text-white/40 text-sm mt-1">แตะปุ่มด้านซ้ายล่าง เพื่อเปิดกล้อง</p>
+          </div>
+        )}
 
         {/* Scan Animation Overlay */}
         {isScanning && (
@@ -188,13 +217,24 @@ export default function StrawberryCameraApp() {
 
       {/* 4. Bottom Camera Controls */}
       <div className="absolute bottom-0 left-0 right-0 z-30 pb-10 pt-6 px-10 flex items-center justify-between">
-        <div className="w-12" /> {/* Spacer */}
+
+        {/* Power / Toggle Camera Button */}
+        <button
+          onClick={() => setIsCameraOn(!isCameraOn)}
+          className={`w-12 h-12 rounded-full backdrop-blur-xl border flex items-center justify-center shadow-lg active:scale-90 transition-transform ${isCameraOn ? "bg-red-500/80 border-red-400 text-white" : "bg-emerald-500/80 border-emerald-400 text-white"}`}
+        >
+          {isCameraOn ? (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0" /><line x1="12" y1="2" x2="12" y2="12" /></svg>
+          ) : (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+          )}
+        </button>
 
         {/* Auto-Scan Toggle Button */}
         <button
-          onClick={() => setAutoScanEnabled(!autoScanEnabled)}
-          disabled={!!errorMsg}
-          className={`relative flex items-center justify-center group active:scale-[0.97] transition-all duration-300 ${autoScanEnabled ? 'opacity-80' : ''}`}
+          onClick={() => isCameraOn && setAutoScanEnabled(!autoScanEnabled)}
+          disabled={!!errorMsg || !isCameraOn}
+          className={`relative flex items-center justify-center group active:scale-[0.97] transition-all duration-300 ${autoScanEnabled ? 'opacity-80' : ''} ${!isCameraOn ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
         >
           {/* Shutter Outer Ring */}
           <div className="w-20 h-20 rounded-full border-[3px] border-white/60 bg-transparent flex items-center justify-center backdrop-blur-sm transition-all group-active:border-white/40">
@@ -213,7 +253,8 @@ export default function StrawberryCameraApp() {
         {/* Flip Camera Button */}
         <button
           onClick={toggleCamera}
-          className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-xl border border-white/10 flex items-center justify-center text-white shadow-lg active:scale-90 transition-transform"
+          disabled={!isCameraOn}
+          className={`w-12 h-12 rounded-full backdrop-blur-xl border flex items-center justify-center shadow-lg transition-transform ${isCameraOn ? "bg-white/10 border-white/10 text-white active:scale-90" : "bg-neutral-800 border-neutral-700 text-neutral-500 cursor-not-allowed"}`}
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 16.5A6.5 6.5 0 0 1 12 23a6.49 6.49 0 0 1-5.71-3.32" /><path d="M5.4 17.5 4 19.6" /><path d="M4 19.6 1.9 18" /><path d="M4 3.5A6.5 6.5 0 0 1 12 1a6.49 6.49 0 0 1 5.71 3.32" /><path d="M18.6 6.5 20 4.4" /><path d="M20 4.4 22.1 6" /></svg>
         </button>

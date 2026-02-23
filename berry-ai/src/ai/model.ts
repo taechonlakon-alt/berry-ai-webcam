@@ -26,7 +26,7 @@ export async function predictRipeness(imageElement: HTMLVideoElement): Promise<n
         formData.append("image", blob, "scan.jpg");
 
         // 4. ยิง Request ไปที่ Python Backend
-        const response = await fetch("http://localhost:8000/predict", {
+        const response = await fetch("https://berry-ai-webcam.onrender.com/predict", {
             method: "POST",
             body: formData,
         });
